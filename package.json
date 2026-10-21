@@ -1,0 +1,37 @@
+{
+  "name": "opencode-telegram-gateway",
+  "version": "1.0.0",
+  "description": "Control OpenCode sessions from Telegram over outbound long polling. No ports, no tunnels.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Aniket Somkuwar",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Aniketsomkuwar/opencode-telegram-gateway.git"
+  },
+  "keywords": [
+    "opencode",
+    "telegram",
+    "bot",
+    "gateway",
+    "remote-control",
+    "ai-agent"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "opencode-telegram-gateway": "bridge.mjs"
+  },
+  "scripts": {
+    "start": "node bridge.mjs",
+    "check": "node --check bridge.mjs && node --check notify.mjs"
+  },
+  "files": [
+    "bridge.mjs",
+    "notify.mjs",
+    "config.example.json",
+    "README.md",
+    "LICENSE"
+  ]
+}

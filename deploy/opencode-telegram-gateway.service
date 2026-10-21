@@ -1,0 +1,15 @@
+[Unit]
+Description=OpenCode Telegram Gateway
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/opencode-telegram-gateway
+ExecStart=/usr/bin/env node %h/opencode-telegram-gateway/bridge.mjs
+Restart=always
+RestartSec=5
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=default.target
