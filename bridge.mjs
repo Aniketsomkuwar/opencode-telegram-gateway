@@ -176,7 +176,7 @@ async function runPrompt(chat_id, userId, text) {
 
       try {
         for (const p of (await api('GET', `/api/session/${sid}/permission`)).data || []) {
-          if ([...pendingPerms.values()].some(v => v.requestId === p.id)) continue;
+          if ([...pendingPerms.values()].some(v => v.rid === p.id)) continue;
           const key = 'p' + (++permSeq);
           pendingPerms.set(key, { sid, rid: p.id, ts: Date.now() });
           await tg('sendMessage', {
@@ -330,7 +330,7 @@ async function handleUpdate(u) {
           const s = await getSession(st.sessionId);
           if (s) {
             const running = (await activeIds()).includes(s.id);
-            lines.push(`▸ \`${s.id}\` ${running?'· ▶ running':'· ○ idle'}`);
+            lines.push(`> \`${s.id}\` ${running?'+ running':'- idle'}`);
             lines.push(esc(short(s.title||'',60)));
             lines.push(`\`${esc(s.location?.directory||'')}\``);
             lines.push(`tokens ${(s.tokens?.input??0)+(s.tokens?.output??0)} · $${(s.cost??0).toFixed(4)}`);
