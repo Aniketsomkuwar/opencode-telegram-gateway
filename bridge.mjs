@@ -67,7 +67,6 @@ async function tg(method, payload) {
 }
 const send = (chat_id, text, extra={}) => tg('sendMessage', { chat_id, text, parse_mode:'Markdown', ...extra })
   .then(r => r.ok ? r : tg('sendMessage', { chat_id, text, ...extra }));
-
 async function sendLong(chat_id, text, extra={}) {
   const LIMIT = 3800;
   if (text.length <= LIMIT) return send(chat_id, text, extra);
@@ -85,6 +84,21 @@ const pendingPerms = new Map(); let permSeq = 0;
 const busySessions = new Set();
 const watchTrack = new Map(); // sid -> { seen:Set, title, gone }
 let watchAll = cfg.watchAll === true;
+
+// Clean up stale permission requests older than 10 minutes.
+function gcPerms() {
+  const cutoff = Date.now() - 10*60*1000;
+  for (const [key, perm] of [...pendingPerms]) {
+    if ((perm.ts ?? 0) < cutoff) pendingPerms.delete(key);
+  }
+}
+setInterval(gcPerms, 60*1000);
+function shutdown() {
+  log('bridge stop');
+  process.exit(0);
+}
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);
 
 // Convert markdown tables into readable bullets (Telegram does not render tables)
 function fmt(t) {
@@ -116,8 +130,8 @@ async function renderSessions(userId) {
   state[userId] = { ...chatState(userId), lastList: list.map(s => s.id) }; saveState();
   if (!list.length) return 'no sessions';
   const rows = list.map((s,i) => {
-    const mark = s.id === cur ? '▸' : ' ';
-    const dot = s.running ? '▶' : '○';
+    const mark = s.id === cur ? '>' : ' ';
+    const dot = s.running ? '+' : '-';
     const dir = s.location?.directory ? short(s.location.directory, 34) : '';
     return `${mark}${dot} ${i+1}. ${esc(short(s.title || '(untitled)', 46))}\n      \`${dir}\` · ${ago(s.time?.updated)}`;
   });
@@ -126,11 +140,11 @@ async function renderSessions(userId) {
 
 function toolLine(title, c) {
   const st = c.state?.status;
-  const ic = st === 'error' ? '❌' : '🔧';
+  const ic = st === 'error' ? '[error]' : '[tool]';
   const d = st === 'error'
     ? short(c.state?.error?.message || 'failed', 160)
     : short(c.state?.input?.command || c.state?.input?.filePath || c.state?.input?.path || c.state?.input?.description || '', 110);
-  return `${ic} *${esc(short(title,40))}*\n${esc(c.name)}${d?': '+esc(d):''}`;
+  return `${ic} ${esc(short(title,40))}\n${esc(c.name)}${d?': '+esc(d):''}`;
 }
 
 // ---------- run a prompt in the current session ----------
@@ -157,21 +171,21 @@ async function runPrompt(chat_id, userId, text) {
 
     const t0 = Date.now(); let hb = 0;
     while (true) {
-      if (Date.now()-t0 > 45*60000) { await send(chat_id,'⏱ still running after 45m — left running locally.'); return; }
+      if (Date.now()-t0 > 45*60000) { await send(chat_id,'still running after 45m — left running locally.'); return; }
       if (Date.now()-hb > 45000) { hb = Date.now(); await tg('sendChatAction', { chat_id, action:'typing' }); }
 
       try {
         for (const p of (await api('GET', `/api/session/${sid}/permission`)).data || []) {
           if ([...pendingPerms.values()].some(v => v.requestId === p.id)) continue;
           const key = 'p' + (++permSeq);
-          pendingPerms.set(key, { sid, rid: p.id });
+          pendingPerms.set(key, { sid, rid: p.id, ts: Date.now() });
           await tg('sendMessage', {
             chat_id, parse_mode:'Markdown',
-            text: `🔐 *Permission*\n${esc(p.action)}\n${esc((p.resources||[]).join('\n').slice(0,500))}`,
+            text: `[permission]\n${esc(p.action)}\n${esc((p.resources||[]).join('\n').slice(0,500))}`,
             reply_markup: { inline_keyboard: [[
-              { text:'✅ Once', callback_data:`${key}:once` },
-              { text:'♾ Always', callback_data:`${key}:always` },
-              { text:'⛔ Deny', callback_data:`${key}:reject` }]] },
+              { text:'Once', callback_data:`${key}:once` },
+              { text:'Always', callback_data:`${key}:always` },
+              { text:'Deny', callback_data:`${key}:reject` }]] },
           });
         }
       } catch {}
@@ -214,7 +228,7 @@ async function watchTick() {
       if (!running.includes(sid) && !busySessions.has(sid)) {
         rec.gone++;
         if (rec.gone >= 2) {
-          if (sid !== currentSid) await send(chat, `✅ ${esc(short(rec.title,50))}`);
+          if (sid !== currentSid) await send(chat, `done ${esc(short(rec.title,50))}`);
           watchTrack.delete(sid);
         }
       } else rec.gone = 0;
@@ -248,7 +262,7 @@ async function handleUpdate(u) {
   const msg = u.message || u.edited_message;
   if (!msg || !msg.text) return;
   const chat_id = msg.chat.id, userId = msg.from.id, text = msg.text.trim();
-  if (!ALLOWED.size) return send(chat_id, `👋 ID \`${userId}\` — add to allowedUserIds in config.json, then restart.`);
+  if (!ALLOWED.size) return send(chat_id, `ID \`${userId}\` — add to allowedUserIds in config.json, then restart.`);
   if (!ALLOWED.has(String(userId))) return;
   cfg.ownerChatId ??= chat_id;
 
@@ -261,26 +275,31 @@ async function handleUpdate(u) {
     switch ((cmd||'').toLowerCase()) {
       case '/start': case '/help': case '/commands':
         return send(chat_id, [
-          '*Remote control*',
-          'Plain text runs in the ▸ current session.',
+          'Remote control',
+          'Plain text runs in the current session.',
           '',
-          '`/sessions` · list all + running state',
-          '`/use 3` · switch to #3',
-          '`/active` · only running ones',
-          '`/new [title]` · new session',
-          '`/newdir <path> [title]` · new session in a project folder',
-          '`/status` · current session details',
-          '`/stop` · interrupt current',
-          '`/remember <text>` · append a note via rememberScript',
-          '`/watch on|off` · completion pings from ALL sessions',
-          '`/ping`',
+          '/sessions · list all + running state',
+          '/use 3 · switch to #3',
+          '/active · running ones, numbered for /use',
+          '/new [title] · new session',
+          '/newdir <path> [title] · new session in a project folder',
+          '/status · current session details',
+          '/stop · interrupt current',
+          '/remember <text> · append a note via rememberScript',
+          '/watch on|off · completion pings from ALL sessions',
+          '/ping',
         ].join('\n'));
       case '/ping': return send(chat_id, `pong · ${(await api('GET','/api/info')).version}`);
       case '/sessions': return send(chat_id, await renderSessions(userId));
       case '/active': {
         const list = (await sessionList()).filter(s => s.running);
         if (!list.length) return send(chat_id, 'nothing running');
-        return send(chat_id, '*Running now*\n' + list.map(s => `▶ ${esc(short(s.title||'(untitled)',50))}\n   \`${short(s.location?.directory||'',40)}\``).join('\n'));
+        st.lastList = list.map(s => s.id); saveState();
+        const cur = st.sessionId;
+        return send(chat_id, '*running*\n' + list.map((s, i) => {
+          const mark = s.id === cur ? '>' : ' ';
+          return `${mark}${i+1}. ${esc(short(s.title||'(untitled)',50))}\n      \`${short(s.location?.directory||'',40)}\``;
+        }).join('\n') + '\n\n/use <n> to switch');
       }
       case '/use': {
         const n = parseInt(arg, 10);
@@ -289,12 +308,12 @@ async function handleUpdate(u) {
         const s = await getSession(ids[n-1]);
         if (!s) return send(chat_id, 'session gone');
         st.sessionId = s.id; saveState();
-        return send(chat_id, `▸ \`${s.id}\`\n${esc(short(s.title||'',60))}\n\`${short(s.location?.directory||'',50)}\``);
+        return send(chat_id, `Current Terminal\n${esc(short(s.title||'',60))}\n\`${short(s.location?.directory||'',50)}\``);
       }
       case '/new': {
         const created = (await api('POST','/api/session',{ title: arg || 'telegram session' })).data;
         st.sessionId = created.id; saveState();
-        return send(chat_id, `🆕 \`${created.id}\``);
+        return send(chat_id, `new session \`${created.id}\``);
       }
       case '/newdir': {
         const m = arg.match(/^"([^"]+)"\s*(.*)$/) || arg.match(/^(\S+)\s*(.*)$/);
@@ -302,7 +321,7 @@ async function handleUpdate(u) {
         const dir = m[1], title = m[2] || 'telegram session';
         const created = (await api('POST','/api/session',{ title, location:{ directory: dir } })).data;
         st.sessionId = created.id; saveState();
-        return send(chat_id, `🆕 \`${created.id}\` in \`${esc(dir)}\``);
+        return send(chat_id, `new session \`${created.id}\` in \`${esc(dir)}\``);
       }
       case '/status': {
         const info = await api('GET','/api/info');
@@ -323,7 +342,7 @@ async function handleUpdate(u) {
       case '/stop': {
         if (!st.sessionId) return send(chat_id, 'no session');
         await api('POST', `/api/session/${st.sessionId}/interrupt`);
-        return send(chat_id, '⏹ interrupted');
+        return send(chat_id, 'interrupted');
       }
       case '/remember': {
         if (!cfg.rememberScript) return send(chat_id, 'remember is not configured; set rememberScript in config.json');
@@ -340,7 +359,7 @@ async function handleUpdate(u) {
       default:
         await runPrompt(chat_id, userId, text);
     }
-  } catch (e) { log('handler', e.message); await send(chat_id, '⚠️ ' + short(e.message, 300)); }
+  } catch (e) { log('handler', e.message); await send(chat_id, 'error: ' + short(e.message, 300)); }
 }
 
 // ---------- main ----------

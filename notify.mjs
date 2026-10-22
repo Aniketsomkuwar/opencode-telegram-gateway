@@ -4,8 +4,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 
-const dir = path.join(os.homedir(), '.opencode-telegram');
-const cfg = JSON.parse(fs.readFileSync(path.join(os.homedir(), 'opencode-telegram', 'config.json'), 'utf8'));
+const dir = path.join(os.homedir(), 'opencode-telegram');
+const cfg = JSON.parse(fs.readFileSync(path.join(dir, 'config.json'), 'utf8'));
 const chatId = cfg.ownerChatId || (cfg.allowedUserIds || [])[0];
 if (!cfg.botToken || cfg.botToken.includes('PASTE')) { console.error('no token'); process.exit(1); }
 if (!chatId) { console.error('no ownerChatId'); process.exit(1); }
