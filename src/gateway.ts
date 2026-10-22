@@ -1,11 +1,11 @@
-﻿import fs from 'node:fs';
+import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import type { Config, Paths } from './config.js';
 import { saveConfig } from './config.js';
 import type { AuditLog } from './audit.js';
 import type { Logger } from './logger.js';
-import { OpencodeClient } from './opencode.js';
+import { OpencodeClient, idleBaselineOf } from './opencode.js';
 import { TelegramClient, TelegramError } from './telegram.js';
 import type { InlineButton, TelegramMessage, TelegramUpdate } from './telegram.js';
 import { SessionQueue } from './queue.js';
@@ -945,8 +945,9 @@ export class Gateway {
     this.inFlight.add(inFlightKey);
 
     try {
+      await this.waitForSessionIdle(sessionId);
       const before = await this.opencode.messages(sessionId, 100).catch(() => [] as MessageInfo[]);
-      const idleBefore = before.filter((message) => message.type === 'idle').length;
+      const baseline = idleBaselineOf(before);
       for (const message of before) {
         for (const part of message.content ?? []) if (part.type === 'tool' && part.id) seenTools.add(part.id);
       }
@@ -961,7 +962,7 @@ export class Gateway {
       }
 
       const timeoutMs = this.config.promptTimeoutMinutes * 60_000;
-      const result = await this.opencode.waitForIdle(sessionId, idleBefore, {
+      const result = await this.opencode.waitForIdle(sessionId, baseline, {
         timeoutMs,
         onTick: async (messages) => {
           await this.surfacePermissions(sessionId, chatId, ctx.threadId);
@@ -1013,6 +1014,20 @@ export class Gateway {
       this.inFlight.delete(inFlightKey);
       if (progressMessageId) await this.telegram.deleteMessage(chatId, progressMessageId).catch(() => undefined);
     }
+  }
+
+  /**
+   * Another client (TUI, desktop app) may be running this session. Posting into a
+   * busy session steers that turn and breaks completion tracking, so wait first.
+   */
+  private async waitForSessionIdle(sessionId: string, maxMs = 120_000): Promise<void> {
+    const started = Date.now();
+    while (Date.now() - started < maxMs) {
+      const active = await this.opencode.activeSessions().catch(() => [] as string[]);
+      if (!active.includes(sessionId)) return;
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+    }
+    this.logger.warn('session is still active in another client; posting anyway', { sessionId });
   }
 
   private assistantText(message: MessageInfo | undefined): string | null {
@@ -1179,10 +1194,11 @@ export class Gateway {
     const started = Date.now();
     try {
       const sessionId = job.sessionId || (await this.ensureSession(ctx, job.text));
+      await this.waitForSessionIdle(sessionId);
       const before = await this.opencode.messages(sessionId, 100).catch(() => [] as MessageInfo[]);
-      const idleBefore = before.filter((message) => message.type === 'idle').length;
+      const baseline = idleBaselineOf(before);
       await this.opencode.prompt(sessionId, job.text, []);
-      const result = await this.opencode.waitForIdle(sessionId, idleBefore, { timeoutMs: this.config.promptTimeoutMinutes * 60_000 });
+      const result = await this.opencode.waitForIdle(sessionId, baseline, { timeoutMs: this.config.promptTimeoutMinutes * 60_000 });
       const output = this.assistantText([...result.messages].reverse().find((message) => message.type === 'assistant'));
       const head = `[scheduled ${job.id}] ${duration(Date.now() - started)}`;
       await this.replyLong(job.chatId, undefined, output ? `${head}\n\n${output}` : head);

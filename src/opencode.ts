@@ -19,8 +19,7 @@ export interface OpencodeOptions {
   timeoutMs?: number;
 }
 
-export class OpencodeError extends Error {
-  readonly status: number;
+export class OpencodeError extends Error {  readonly status: number;
   readonly body: string;
   constructor(message: string, status: number, body = '') {
     super(message);
@@ -28,6 +27,33 @@ export class OpencodeError extends Error {
     this.status = status;
     this.body = body;
   }
+}
+
+export interface IdleBaseline {
+  count: number;
+  at: number;
+}
+
+/** Snapshot the idle markers before a prompt so a new one can be detected. */
+export function idleBaselineOf(messages: MessageInfo[]): IdleBaseline {
+  const idles = messages.filter((message) => message.type === 'idle');
+  let at = 0;
+  for (const idle of idles) at = Math.max(at, idle.time?.created ?? 0);
+  return { count: idles.length, at };
+}
+
+/**
+ * A turn is done when an idle marker newer than the baseline exists.
+ * Time is the reliable signal; count is the fallback for payloads without it.
+ */
+export function turnCompleted(messages: MessageInfo[], baseline: IdleBaseline): MessageInfo | null {
+  const idles = messages.filter((message) => message.type === 'idle');
+  const newest = idles[idles.length - 1];
+  if (!newest) return null;
+  const created = newest.time?.created ?? 0;
+  if (created > baseline.at) return newest;
+  if (!created && idles.length > baseline.count) return newest;
+  return null;
 }
 
 function isRetryable(error: unknown): boolean {
@@ -183,8 +209,10 @@ export class OpencodeClient {
   }
 
   async messages(sessionId: string, limit = 100): Promise<MessageInfo[]> {
-    const response = await this.api<{ data: MessageInfo[] }>('GET', `/api/session/${sessionId}/message?limit=${limit}&order=asc`);
-    return response.data ?? [];
+    // Newest page first, then reversed: `order=asc` returns the oldest messages,
+    // which hides the current turn's idle marker in long sessions.
+    const response = await this.api<{ data: MessageInfo[] }>('GET', `/api/session/${sessionId}/message?limit=${limit}&order=desc`);
+    return (response.data ?? []).slice().reverse();
   }
 
   async prompt(sessionId: string, text: string, files: Array<{ uri: string; name?: string }> = []): Promise<void> {
@@ -248,7 +276,7 @@ export class OpencodeClient {
   /** Poll until the session reports one more idle message than `idleBefore`. */
   async waitForIdle(
     sessionId: string,
-    idleBefore: number,
+    baseline: IdleBaseline,
     options: {
       timeoutMs: number;
       signal?: AbortSignal;
@@ -271,10 +299,9 @@ export class OpencodeClient {
         continue;
       }
       await options.onTick?.(messages);
-      const idleCount = messages.filter((message) => message.type === 'idle').length;
-      if (idleCount > idleBefore) {
-        const idle = messages.filter((message) => message.type === 'idle').pop();
-        return { messages, outcome: idle?.outcome ?? null, timedOut: false };
+      const idle = turnCompleted(messages, baseline);
+      if (idle) {
+        return { messages, outcome: idle.outcome ?? null, timedOut: false };
       }
       await sleep(pollMs, options.signal).catch(() => undefined);
       if (options.signal?.aborted) {
