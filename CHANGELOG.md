@@ -19,6 +19,7 @@ Complete rewrite of the gateway in strict TypeScript, keeping the v1 `config.jso
 - `install`, `start`, `stop`, `restart`, `status`, `doctor` and `setup` subcommands (Windows scheduled task, systemd user unit, launchd agent).
 - Live progress message, deleted when the answer arrives; `/verbose` for the tool feed.
 - Inline keyboards with pagination for `/sessions` and `/active`.
+- `/delete` with an inline confirmation step: owner-only, expires after 2 minutes, clears the chat selection and the cached list entry.
 - Forum topic mode: one topic maps to one session.
 - `/model`, `/agent`, `/compact`, `/undo`, `/redo`, `/diff`, `/todo`, `/cost`.
 - Permission UX with risk labels, human summaries, configurable auto-deny, and post-decision message edits.

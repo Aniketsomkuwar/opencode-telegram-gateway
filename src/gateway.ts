@@ -56,6 +56,7 @@ export class Gateway {
   private watchTimer: NodeJS.Timeout | null = null;
   private hooks: GatewayHooks = {};
   private readonly watchTrack = new Map<string, { title: string; since: number; gone: number }>();
+  private readonly deletions = new Map<string, { sessionId: string; chatId: number; threadId?: number; timer: NodeJS.Timeout }>();
   private webhookServer: import('node:http').Server | null = null;
   private lastError: string | null = null;
   private stopping = false;
@@ -144,6 +145,8 @@ export class Gateway {
     this.heartbeat = null;
     if (this.watchTimer) clearInterval(this.watchTimer);
     this.watchTimer = null;
+    for (const pending of this.deletions.values()) clearTimeout(pending.timer);
+    this.deletions.clear();
     await new Promise<void>((resolve) => {
       if (!this.webhookServer) return resolve();
       this.webhookServer.close(() => resolve());
@@ -305,8 +308,54 @@ export class Gateway {
       return;
     }
 
-    if (data.startsWith('u:') && chatId) {
-      const sessionId = data.slice(2);
+    if ((data.startsWith('d:') || data.startsWith('x:')) && chatId) {
+      if (data.startsWith('d:') && role !== 'owner') {
+        await this.telegram.answerCallbackQuery(callback.id, 'owner only', true).catch(() => undefined);
+        return;
+      }
+      const key = data.slice(2);
+      const pending = this.deletions.get(key);
+      if (!pending || pending.chatId !== chatId) {
+        await this.telegram.answerCallbackQuery(callback.id, 'expired').catch(() => undefined);
+        return;
+      }
+      clearTimeout(pending.timer);
+      this.deletions.delete(key);
+      if (data.startsWith('x:')) {
+        await this.telegram.answerCallbackQuery(callback.id, 'cancelled').catch(() => undefined);
+        if (callback.message) {
+          await this.telegram.editMessageText(chatId, callback.message.message_id, 'Deletion cancelled').catch(() => undefined);
+        }
+        return;
+      }
+      try {
+        this.queue.cancel(pending.sessionId);
+        this.watchTrack.delete(pending.sessionId);
+        await this.opencode.deleteSession(pending.sessionId);
+      } catch (error) {
+        this.logger.error('session delete failed', { sessionId: pending.sessionId, error: errorMessage(error) });
+        await this.telegram.answerCallbackQuery(callback.id, 'delete failed', true).catch(() => undefined);
+        if (callback.message) {
+          await this.telegram
+            .editMessageText(chatId, callback.message.message_id, `delete failed: ${short(errorMessage(error), 300)}`)
+            .catch(() => undefined);
+        }
+        return;
+      }
+      const ref = this.sessionRef(chatId, pending.threadId);
+      if (ref.get() === pending.sessionId) ref.set(null);
+      const chat = this.state.chat(chatId);
+      if (chat.lastList) chat.lastList = chat.lastList.filter((id) => id !== pending.sessionId);
+      this.state.scheduleSave();
+      this.audit.write({ actor: userId, action: 'session.delete', detail: pending.sessionId });
+      await this.telegram.answerCallbackQuery(callback.id, 'deleted').catch(() => undefined);
+      if (callback.message) {
+        await this.telegram.editMessageText(chatId, callback.message.message_id, `deleted ${pending.sessionId}`).catch(() => undefined);
+      }
+      return;
+    }
+
+    if (data.startsWith('u:') && chatId) {      const sessionId = data.slice(2);
       const session = await this.opencode.session(sessionId).catch(() => null);
       if (!session) {
         await this.telegram.answerCallbackQuery(callback.id, 'session gone').catch(() => undefined);
@@ -340,6 +389,7 @@ export class Gateway {
     return [
       { command: 'sessions', description: 'list sessions' },
       { command: 'use', description: 'switch session' },
+      { command: 'delete', description: 'delete a session' },
       { command: 'active', description: 'running sessions' },
       { command: 'new', description: 'new session' },
       { command: 'status', description: 'current session' },
@@ -369,6 +419,7 @@ export class Gateway {
       '',
       '/sessions - list sessions',
       '/use <n|id> - switch session',
+      '/delete <n|id> - delete a session (confirmed, owner)',
       '/active - running sessions',
       '/new [title] - new session',
       '/newdir <path> [title] - new session in a folder',
@@ -447,17 +498,41 @@ export class Gateway {
       }
 
       case '/use': {
-        const ids = chat.lastList ?? (await this.opencode.sessions(30)).map((session) => session.id);
-        let sessionId: string | undefined;
-        const numeric = Number.parseInt(argument, 10);
-        if (Number.isFinite(numeric) && numeric > 0) sessionId = ids[numeric - 1];
-        else if (argument) sessionId = ids.find((id) => id === argument) ?? ids.find((id) => id.startsWith(argument));
-        if (!sessionId) return reply('usage: /sessions then /use <number>');
-        const session = await this.opencode.session(sessionId);
-        if (!session) return reply('session gone');
+        const session = await this.resolveSessionId(ctx.chatId, argument);
+        if (!session) return reply('usage: /sessions then /use <number>');
         ref.set(session.id);
         this.audit.write({ actor: ctx.userId, action: 'session.use', detail: session.id });
         return reply(`Current Terminal\n${escapeMd(short(session.title ?? '', 60))}\n${session.location?.directory ?? ''}`);
+      }
+
+      case '/delete': {
+        if (ctx.role !== 'owner') return reply('owner only');
+        const session = await this.resolveSessionId(ctx.chatId, argument);
+        if (!session) return reply('usage: /sessions then /delete <number>');
+        const running = await this.opencode.activeSessions().catch(() => [] as string[]);
+        const isCurrent = ref.get() === session.id;
+        const key = randomId('');
+        const timer = setTimeout(() => {
+          if (!this.deletions.delete(key)) return;
+          void this.telegram
+            .sendFormatted(ctx.chatId, `delete confirmation for ${session.id} expired`, { messageThreadId: ctx.threadId })
+            .catch(() => undefined);
+        }, 120_000);
+        timer.unref?.();
+        this.deletions.set(key, { sessionId: session.id, chatId: ctx.chatId, threadId: ctx.threadId, timer });
+        const lines = [
+          `delete "${short(session.title ?? session.id, 60)}"?`,
+          session.location?.directory ?? '',
+          isCurrent ? 'this is the current session for this chat' : '',
+          running.includes(session.id) ? 'it is running; deletion will abort it' : '',
+          'this cannot be undone',
+        ].filter(Boolean);
+        return reply(lines.join('\n'), [
+          [
+            { text: 'Delete', callback_data: `d:${key}` },
+            { text: 'Cancel', callback_data: `x:${key}` },
+          ],
+        ]);
       }
 
       case '/new': {
@@ -719,6 +794,17 @@ export class Gateway {
   }
 
   // ---------------------------------------------------------------- rendering
+
+  private async resolveSessionId(chatId: number, argument: string): Promise<SessionInfo | null> {
+    const chat = this.state.chat(chatId);
+    const ids = chat.lastList ?? (await this.opencode.sessions(30)).map((session) => session.id);
+    const numeric = Number.parseInt(argument, 10);
+    let sessionId: string | undefined;
+    if (Number.isFinite(numeric) && numeric > 0) sessionId = ids[numeric - 1];
+    else if (argument) sessionId = ids.find((id) => id === argument) ?? ids.find((id) => id.startsWith(argument));
+    if (!sessionId) return null;
+    return this.opencode.session(sessionId);
+  }
 
   private renderSessionList(sessions: SessionInfo[], current: string | null, heading: string): string {
     const rows = sessions.map((session, index) => {

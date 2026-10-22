@@ -178,6 +178,10 @@ export class OpencodeClient {
     return response.data;
   }
 
+  async deleteSession(sessionId: string): Promise<void> {
+    await this.api('DELETE', `/api/session/${sessionId}`);
+  }
+
   async messages(sessionId: string, limit = 100): Promise<MessageInfo[]> {
     const response = await this.api<{ data: MessageInfo[] }>('GET', `/api/session/${sessionId}/message?limit=${limit}&order=asc`);
     return response.data ?? [];

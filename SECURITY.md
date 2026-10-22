@@ -21,7 +21,7 @@ The gateway forwards Telegram messages into an OpenCode session. OpenCode can re
 
 ## Roles
 
-- `owner`: every command, "Always" approvals, `/lock`, `/role`, `/audit`.
+- `owner`: every command, "Always" approvals, `/lock`, `/role`, `/audit`, `/delete`.
 - `operator`: prompts, once-only approvals, read commands.
 - `viewer`: read-only commands, no prompts, no approvals.
 

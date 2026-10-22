@@ -50,6 +50,7 @@ node dist/index.js stop
 | `/sessions [page]` | Session list with buttons |
 | `/active` | Only running sessions |
 | `/use <n\|id>` | Switch the current session |
+| `/delete <n\|id>` | Delete a session after confirming; owner only, clears the chat selection |
 | `/new [title]` | New session |
 | `/newdir <path> [title]` | New session in a project folder |
 | `/status` | Current session, model, agent, cost, lock and queue state |
