@@ -1,7 +1,12 @@
-config.json
+﻿config.json
 state.json
 *.log
 node_modules/
 .env
 .DS_Store
 Thumbs.db
+dist/
+gateway.state.json
+gateway.lock
+inbox/
+

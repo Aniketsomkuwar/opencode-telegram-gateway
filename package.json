@@ -1,6 +1,6 @@
-{
+﻿{
   "name": "opencode-telegram-gateway",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Control OpenCode sessions from Telegram over outbound long polling. No ports, no tunnels.",
   "type": "module",
   "license": "MIT",
@@ -21,17 +21,25 @@
     "node": ">=20"
   },
   "bin": {
-    "opencode-telegram-gateway": "bridge.mjs"
+    "opencode-telegram-gateway": "dist/index.js"
   },
   "scripts": {
-    "start": "node bridge.mjs",
-    "check": "node --check bridge.mjs && node --check notify.mjs"
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js run",
+    "dev": "node --watch src/index.ts run",
+    "test": "npm run build && node --test \"test/*.test.ts\"",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "typescript": "^5.9.3"
   },
   "files": [
-    "bridge.mjs",
-    "notify.mjs",
+    "dist",
     "config.example.json",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "SECURITY.md"
   ]
 }
+
