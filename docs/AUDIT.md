@@ -167,3 +167,17 @@ See `docs/HERMES-COMPARISON.md` for the full ADOPT/ADAPT/SKIP analysis. Key deci
 ## 10. Immediate next step
 
 Show `docs/HERMES-COMPARISON.md`, `docs/AUDIT.md`, and this plan for approval. No feature code is written until approved. Then proceed phase by phase, running tests after each phase, updating docs, and giving a short summary after each phase.
+
+---
+
+## 11. Update, 2026-10-23: event stream confirmed
+
+Section 7 is superseded. `GET /api/event` is present in the live OpenAPI spec (119 paths) and is documented as `text/event-stream`, so an SSE transport exists. The full path list and payload schemas are now recorded in `docs/opencode-api.md`.
+
+What changed as a result:
+
+- Polling (`GET /api/session/{id}/message` plus `GET /api/session/active`) stays the implemented transport, because it is verified end to end and does not depend on unrecorded event names.
+- SSE is a viable Phase 5 optimisation, not a Phase 1 requirement. Before switching, capture the live event names and payloads into `docs/opencode-api.md`.
+- `doctor` and the OpenCode client recover from service restarts by re-reading `service.json` and `/api/info` on 401 or connection failure, which covers the practical part of the reliability goal without SSE.
+
+Other audit rows now closed: F1 (lock), F3 (backoff and 429), F4 (re-discovery), F5 (per-session queue), F6 (fence-safe split), F7 (permission timeout), F8 (tolerant state load), F10 (lock); S1 (`TELEGRAM_BOT_TOKEN`), S2 (roles), S4 (risk labels and audit), S5 (redaction), S7 (rate limit), S8 (audit log rotation); R1, R2, R3; TD1 to TD10 except the adapter interface, which is documented rather than implemented. S3 (OpenCode bind) is reported by `doctor` and cannot be fixed from inside the gateway.

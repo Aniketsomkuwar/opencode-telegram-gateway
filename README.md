@@ -1,165 +1,172 @@
 # opencode-telegram-gateway
 
-Drive [OpenCode](https://opencode.ai) from Telegram. One bot, many sessions, no inbound ports.
+Control your OpenCode sessions from Telegram. One bot, many sessions, no inbound ports and no tunnels: the gateway only makes outbound calls to `api.telegram.org` and to your local OpenCode service.
 
-## What this tool is about
+## Quick start (2 minutes)
 
-OpenCode is a powerful local AI coding agent, but it normally runs in a terminal on one machine. If you are away from that machine, you cannot talk to it.
+Prerequisites: Node 20 or newer, a running OpenCode service, and a bot token from [@BotFather](https://t.me/BotFather).
 
-This gateway turns your Telegram bot into a remote control for OpenCode. You message the bot; the bot sends your text to OpenCode; OpenCode replies; the bot sends that reply back to you. It runs on the same laptop or server where OpenCode is installed, and it only makes outbound connections — so you do not open any ports, run no tunnels, and expose nothing to the internet.
+```bash
+git clone https://github.com/Aniketsomkuwar/opencode-telegram-gateway
+cd opencode-telegram-gateway
+npm install
+npm run build
+npm run setup          # asks for token and user id, validates the token
+npm run doctor         # checks Node, config, token, OpenCode, permissions, bind
+npm start              # foreground run
+```
 
-This is an unofficial community project. It is not affiliated with OpenCode or Telegram.
+Then send `/start` to your bot from the allowlisted account.
+
+To run it as a service:
+
+```bash
+node dist/index.js install     # Windows logon task, systemd user unit, or launchd
+node dist/index.js start
+node dist/index.js status
+node dist/index.js stop
+```
+
+`npm start` is a convenience alias for `node dist/index.js run`.
 
 ## What it does
 
-| You do | The gateway does |
-|---|---|
-| Send any message in Telegram | Runs it as a prompt in your current OpenCode session |
-| Send `/sessions` | Lists every session, with running state |
-| Send `/use <n>` | Switches to session number `n` |
-| Send `/active` | Lists running sessions only, numbered |
-| Send `/stop` | Interrupts the current run |
-| Send `/remember <text>` | Appends a dated note to your memory journal |
-| Receive a reply | Get OpenCode's final answer as one Telegram message |
-| OpenCode asks permission (edit, write, shell…) | Get an inline button: Once / Always / Deny |
-
-In short: Telegram is a second client on the same session store as your OpenCode terminal. Both devices can drive the same conversation, one message at a time.
-
-## How it does it
-
-1. **Locate the service.** On startup it reads `~/.config/opencode/service.json` for the Basic-auth password, and calls `GET /api/info` to find the OpenCode service URL (fallback: `http://127.0.0.1:45278`).
-2. **Authenticate.** Every API call to OpenCode uses HTTP Basic auth with user `opencode` and the password from `service.json`.
-3. **Poll Telegram.** It calls `getUpdates` with long polling (50 second timeout). Your laptop initiates every connection to Telegram; nothing listens inbound.
-4. **Run your prompt.** When you send text, it POSTs to `/api/session/{id}/prompt`. It then polls the message stream until OpenCode returns an `idle` result, at which point the assistant's final text is sent back to you as one Telegram message.
-5. **Handle permissions.** If OpenCode asks for permission on a tool call, the gateway sends you an inline button (Once / Always / Deny) and relays your choice back via `/api/session/{id}/permission/{id}/reply`.
-6. **Stay quiet by default.** No per-tool chatter, no session-title prefixes, no completion pings. You get exactly one message — OpenCode's answer — unless you opt in with `/watch on` or `verbose: true`.
-
-### Data flow
-
-```
-You (Telegram) ──┐
-                 ▼
-         gateway polls getUpdates
-                 ▼
-         POST /api/session/{id}/prompt  (OpenCode local API)
-                 ▼
-         OpenCode works, may ask permission
-         gateway sends Once / Always / Deny buttons
-                 ▼
-         assistant final text
-                 ▼
-         sendMessage back to you (Telegram)
-```
-
-## Requirements
-
-- OpenCode v2 with its local service running (`opencode` creates `~/.config/opencode/service.json`).
-- Node.js 20 or newer (uses global `fetch` and `AbortSignal.timeout`).
-- A Telegram bot token from [@BotFather](https://t.me/BotFather).
-
-## Install
-
-```bash
-git clone https://github.com/Aniketsomkuwar/opencode-telegram-gateway.git
-cd opencode-telegram-gateway
-cp config.example.json config.json
-```
-
-Edit `config.json`:
-
-```json
-{
-  "botToken": "123456:ABC...",
-  "allowedUserIds": [123456789],
-  "ownerChatId": 123456789
-}
-```
-
-Get your numeric Telegram ID from [@userinfobot](https://t.me/userinfobot). `allowedUserIds` is an allowlist: if it is empty, the bot answers nobody. `ownerChatId` is where notices and `/watch` output go; it can be the same as your user ID.
-
-Start it:
-
-```bash
-npm start
-```
-
-Then open your bot in Telegram and send `/start`.
-
-## Configuration
-
-| Key | Default | Meaning |
-|---|---|---|
-| `botToken` | required | Telegram bot token |
-| `allowedUserIds` | `[]` | Numeric Telegram user IDs allowed to control the bot |
-| `ownerChatId` | first allowed user | Chat for notices and watch output |
-| `verbose` | `false` | Send a line per tool call. Off by default |
-| `notifyToolCalls` | `false` | Legacy alias for `verbose` |
-| `watchAll` | `false` | Send one completion notice when another session finishes |
-| `serviceUrl` | discovered | Override the OpenCode API URL |
-| `servicePort` | `45278` | Fallback port when discovery fails |
-| `rememberScript` | unset | Script invoked by `/remember`; see below |
-
-`config.json`, `state.json` and `*.log` are gitignored and must never be committed.
+- Plain text sent to the bot becomes a prompt in the currently selected session. The final assistant reply is delivered; tool chatter stays hidden unless you enable it.
+- `/sessions` shows sessions with inline buttons and pagination. `/use 3` or a button switches.
+- If a session is busy, prompts queue in order and the bot tells you the position.
+- Long replies are split at paragraph and code-fence boundaries, or sent as a `.md` document when very long.
+- Permission requests arrive as inline buttons with a risk label (read only, changes files, high risk) and auto-deny after a configurable timeout.
+- Forum topics map one topic to one session, so several sessions run concurrently in one supergroup.
+- Secrets that look like tokens, keys or `.env` values are redacted before anything is sent to Telegram.
+- Every mutating action lands in an append-only audit log.
 
 ## Commands
 
-| Command | Action |
+| Command | Purpose |
 |---|---|
-| any text | Run in the current session, or create one if none is selected |
-| `/sessions` | List sessions with running state |
-| `/use <n>` | Switch to session number `n` |
-| `/active` | Running sessions only, numbered for `/use` |
-| `/new [title]` | Create a session |
-| `/newdir <path> [title]` | Create a session in a project folder |
-| `/status` | Current session, model info, cost, watch state |
-| `/stop` | Interrupt the current run |
-| `/remember <text>` | Append a note through `rememberScript` |
-| `/watch on\|off` | Completion pings from ALL sessions |
+| `/start`, `/help`, `/commands` | Command list |
 | `/ping` | Health check |
+| `/health` | Uptime, OpenCode reachability, queue depth, pending permissions, last error |
+| `/sessions [page]` | Session list with buttons |
+| `/active` | Only running sessions |
+| `/use <n\|id>` | Switch the current session |
+| `/new [title]` | New session |
+| `/newdir <path> [title]` | New session in a project folder |
+| `/status` | Current session, model, agent, cost, lock and queue state |
+| `/queue`, `/clear` | Queued prompts and how to drop them |
+| `/stop` | Interrupt the current run |
+| `/model [n]` | List models, then switch by number or `provider/model` |
+| `/agent [n]` | List agents, then switch by number or id |
+| `/compact` | Compact the session context |
+| `/undo` | Revert the last turn (files included) |
+| `/redo` | Re-run the last prompt |
+| `/diff [file]` | Changed files, or the patch as a file |
+| `/todo` | Latest todo list from the session |
+| `/cost` | Tokens and cost |
+| `/schedule in 10m <text>` | Run a prompt later (`at 09:30` also works) |
+| `/cron "*/30 * * * *" <text>` | Recurring prompt |
+| `/jobs`, `/cancel <id>` | Manage scheduled jobs |
+| `/verbose on\|off` | Live progress and tool feed |
+| `/watch on\|off` | Completion pings for every session |
+| `/remember <text>` | Append a note through `rememberScript` |
+| `/sendfile <path>` | Send a file back (allowlisted roots) |
+| `/lock`, `/unlock [pin]` | Kill switch: deny prompts and approvals |
+| `/role <id> owner\|operator\|viewer` | Owner only |
+| `/audit [n]` | Owner only, recent audit entries |
 
-### `/remember`
+Roles: `viewer` can read (sessions, status, cost, diff, todo), `operator` can prompt and approve once, `owner` can approve "Always", change config and lock the bot. The first allowed user id is the owner unless `ownerUserIds` says otherwise.
 
-Point `rememberScript` at any executable you want to capture notes with. A `.ps1` file is invoked through PowerShell with `-Text` and `-Tag`; a `.js`/`.mjs` file is invoked with Node; anything else is executed directly with `--text` and `--tag`. If the key is absent, `/remember` replies that it is not configured.
+## Configuration
 
-## Run it permanently
+`config.json` lives in `~/opencode-telegram` by default. `GATEWAY_HOME` or `--home` moves it.
 
-### Linux (systemd)
+| Key | Default | Meaning |
+|---|---|---|
+| `botToken` | required | BotFather token. `TELEGRAM_BOT_TOKEN` overrides it and is the recommended place in production |
+| `allowedUserIds` | `[]` | Allowlist. Empty denies everyone |
+| `ownerUserIds` | first allowed | Users with the `owner` role |
+| `roles` | `{}` | Explicit `owner` / `operator` / `viewer` per user id |
+| `ownerChatId` | first allowed | Where completion pings go |
+| `verbose` | `false` | Tool feed and always-on progress message |
+| `progress` | `true` | Live progress after 4 seconds, removed when the answer lands |
+| `watchAll` | `false` | Ping when any session finishes |
+| `servicePort` | `45278` | Fallback OpenCode port when `/api/info` is unreachable |
+| `serviceUrl` | auto | Pin the OpenCode base URL |
+| `logLevel` | `info` | `debug`, `info`, `warn`, `error` |
+| `permissionTimeoutSeconds` | `300` | Auto-deny after this long |
+| `promptTimeoutMinutes` | `45` | Stop waiting for a reply |
+| `queueLimit` | `20` | Per-session queue depth |
+| `maxMessageChars` | `4000` | Split threshold, max 4096 |
+| `redact` | `true` | Mask credentials in outbound text |
+| `rateLimit.perMinute` | `20` | Per-user inbound limit |
+| `rememberScript` | none | `.ps1`, `.js`/`.mjs` or executable called with `-Text`/`--text` |
+| `plugin` | none | Module with `onPrompt`, `onReply`, `onPermission` hooks |
+| `inbound` | on, 20 MB | Files and photos are downloaded to `inbox/<chat>/` |
+| `outbound.allowedRoots` | `[]` | Allowlist for `/sendfile`; empty means any path |
+| `stt.command` | none | Local transcription command, receives the audio path |
+| `audit` | `audit.jsonl` | Rotation size and file count |
+| `webhook` | off | Loopback-only trigger, see below |
+
+Secrets: the token may stay in `config.json` or move to `TELEGRAM_BOT_TOKEN`. `GATEWAY_PIN` protects `/unlock`, `GATEWAY_WEBHOOK_SECRET` protects the webhook. None of them are ever written to the repository.
+
+## How it works
+
+```
+Telegram  <-- long poll / send -->  gateway  <-- HTTP + Basic auth -->  OpenCode service
+```
+
+- Outbound long polling only. No webhook, no port forwarding.
+- The gateway is a second client on the same session store as the TUI, so both can drive the same conversation.
+- OpenCode credentials come from `~/.config/opencode/service.json`; the gateway re-reads them on 401 or connection failure, so a restarted service is picked up automatically.
+- A single-instance lock prevents two gateways polling the same bot (Telegram answers 409 otherwise).
+- State (`state.json`) stores the Telegram offset, per-chat session choice, topic map and jobs. Writes are atomic.
+- Retries use exponential backoff with jitter; Telegram 429 `retry_after` is honored.
+
+## Optional webhook (opt-in, loopback only)
+
+Set `webhook.enabled` and `GATEWAY_WEBHOOK_SECRET`, then:
 
 ```bash
-mkdir -p ~/.config/systemd/user
-cp deploy/opencode-telegram-gateway.service ~/.config/systemd/user/
-systemctl --user daemon-reload
-systemctl --user enable --now opencode-telegram-gateway
-journalctl --user -u opencode-telegram-gateway -f
+curl -X POST http://127.0.0.1:45888/notify -H "x-gateway-secret: $GATEWAY_WEBHOOK_SECRET" -d '{"text":"build finished"}'
 ```
 
-### Windows (scheduled task)
+It only binds to `127.0.0.1`; the gateway refuses to start otherwise. Anything reachable by a local process can send messages, so keep the secret out of shared scripts.
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\deploy\windows-scheduled-task.ps1
+## Troubleshooting
+
+| Symptom | Cause and fix |
+|---|---|
+| `another gateway is already running` | A second instance holds `gateway.lock`. Use `status`, stop the duplicate, or delete a stale lock |
+| Bot silent, log shows 409 | Same token polled elsewhere, often an old `node bridge.mjs` or a leftover task |
+| `opencode rejected credentials` | `service.json` changed; the gateway reloads it, but a wrong `serviceUrl` also causes this |
+| `/sessions` empty | The service is bound elsewhere or has no sessions for this location |
+| Permission buttons do nothing | Requests expire after `permissionTimeoutSeconds`; send a new prompt |
+| Long answer truncated | Raise `maxMessageChars` or use `/diff file`; parts are numbered |
+| `doctor` reports non-loopback bind | Set `"hostname": "127.0.0.1"` in `~/.config/opencode/service.json` |
+
+## FAQ
+
+**Does this open a port?** No. All traffic is outbound. The optional webhook is off by default and loopback-only.
+
+**Can I use it with the desktop app or TUI at the same time?** Yes. They are separate clients on the same sessions. Keep only one client typing into a session at a time to avoid interleaved prompts.
+
+**Is Telegram the only front end?** It is the only implemented adapter. The core is platform-agnostic; the adapter boundary is documented in `docs/HERMES-COMPARISON.md`.
+
+**Where is the OpenCode API documented?** `docs/opencode-api.md`, verified against a running 2.1.2 service.
+
+**What happens on restart mid-run?** The offset is persisted after handling, so an update may replay once but never disappears. The prompt may need re-sending; the queue is in memory.
+
+## Development
+
+```bash
+npm run dev        # run from source with watch
+npm run build      # tsc to dist/
+npm test           # build + node:test suite
+npm run typecheck
 ```
 
-The script registers a logon task that calls `node.exe` directly. Do not wrap the command in `cmd.exe`: the wrapper inherits a console and the task dies with `Ctrl+C`.
-
-## Security
-
-Read this before you put it on a machine you care about.
-
-- **The bot is remote code execution.** It drives an agent that can run shell commands. Keep `allowedUserIds` to accounts you control.
-- **Keep the service local.** If `~/.config/opencode/service.json` binds to `0.0.0.0`, the API is reachable from your LAN. Set `"hostname": "127.0.0.1"` unless you need otherwise.
-- **Transcripts and tokens.** A bot token pasted into a chat is compromised. Regenerate it with BotFather if that happens.
-- **Permissions.** The gateway surfaces OpenCode permission requests as buttons. Configure OpenCode so destructive tools ask rather than run.
-- **No secrets in the repo.** `config.json` is gitignored. Verify with `git status` before committing.
-
-See `SECURITY.md` for the threat model and reporting.
-
-## Limitations
-
-- One Telegram user per running instance. Multiple users are not isolated from each other.
-- No attachment upload or download.
-- Markdown rendering is Telegram's subset; tables become bullet lists on purpose.
-- The bridge must run on the same machine as the OpenCode service, or reach it over the network with `serviceUrl`.
+Layout: `src/config.ts` (validation), `src/state.ts` (offset and chats), `src/queue.ts` (per-session FIFO), `src/telegram.ts` and `src/opencode.ts` (clients), `src/permissions.ts` (buttons, risk, timeout), `src/gateway.ts` (orchestration and commands), `src/lifecycle.ts` (install, doctor, setup), `src/hooks.ts` (plugin points).
 
 ## License
 
-MIT. See `LICENSE`.
+MIT. See `SECURITY.md` for the threat model.

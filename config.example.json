@@ -1,8 +1,26 @@
 {
   "botToken": "PASTE_BOT_TOKEN_FROM_BOTFATHER",
   "allowedUserIds": [123456789],
+  "ownerUserIds": [123456789],
+  "roles": { "123456789": "owner" },
   "ownerChatId": 123456789,
   "verbose": false,
+  "progress": true,
+  "watchAll": false,
   "notifyToolCalls": false,
-  "watchAll": false
+  "servicePort": 45278,
+  "logLevel": "info",
+  "permissionTimeoutSeconds": 300,
+  "promptTimeoutMinutes": 45,
+  "queueLimit": 20,
+  "maxMessageChars": 4000,
+  "redact": true,
+  "rateLimit": { "perMinute": 20 },
+  "rememberScript": "",
+  "plugin": "",
+  "inbound": { "enabled": true, "maxBytes": 20971520 },
+  "outbound": { "allowedRoots": [], "maxBytes": 52428800 },
+  "stt": { "command": "", "args": [], "timeoutMs": 120000 },
+  "audit": { "maxBytes": 5242880, "keep": 5 },
+  "webhook": { "enabled": false, "host": "127.0.0.1", "port": 45888, "secretEnv": "GATEWAY_WEBHOOK_SECRET" }
 }
