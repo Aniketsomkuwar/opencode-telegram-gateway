@@ -1,4 +1,4 @@
-# Hermes Agent comparison — reference for opencode-telegram-gateway
+# Hermes Agent comparison --- reference for opencode-telegram-gateway
 
 Source studied: Nous Research Hermes Agent (MIT License). Docs pages reviewed:
 - https://hermes-agent.nousresearch.com/docs/user-guide/messaging/
@@ -22,7 +22,7 @@ Hermes exposes a unified `hermes gateway` CLI with subcommands:
 |---|---|
 | `gateway run` | Run the gateway in the foreground (recommended for WSL/Docker/Termux). |
 | `gateway install` | Install as a user service (Linux systemd, macOS launchd, Windows Task Scheduler). `--system` for a boot-time system service on Linux. `--force` regenerates a drifted unit/task. |
-| `gateway start` / `stop` / `restart` | Start, stop, or restart the installed service. `restart` is drain-aware (SIGUSR1 → refuse new turns → wait for in-flight work → exit → supervisor relaunches). |
+| `gateway start` / `stop` / `restart` | Start, stop, or restart the installed service. `restart` is drain-aware (SIGUSR1 --- refuse new turns --- wait for in-flight work --- exit --- supervisor relaunches). |
 | `gateway status` | Check service status, including registration drift vs. the current template (compares owned settings only). |
 | `gateway ensure` | Discover or start the active profile's session runtime without installing a service or replacing an existing owner. Emits JSON (`state`, `reason_code`, optional `endpoint`). Exit 0 = ready; other codes = refusal/deadline, never permission to start a replacement. |
 | `gateway setup` | Interactive messaging-platform setup wizard. |
@@ -32,10 +32,10 @@ Key production patterns observed:
 - **Each `HERMES_HOME` gets its own service name** (`hermes-gateway` for default, `hermes-gateway-<hash>` for others). Multiple installations coexist without colliding.
 - **Install refuses to overwrite a unit belonging to a different home** unless `--force` is passed, preventing one gateway from hijacking another's service.
 - **Windows uses a hidden `wscript` + `.vbs` launcher** specifically so the task never inherits a console that `CTRL_CLOSE_EVENT` could kill (this is directly relevant to our earlier `^C` failure with `cmd.exe`).
-- **macOS launchd plist is static** — PATH changes after install require re-running `install`; launchd runs the gateway through `/usr/bin/osascript` to satisfy Local Network Privacy.
+- **macOS launchd plist is static** --- PATH changes after install require re-running `install`; launchd runs the gateway through `/usr/bin/osascript` to satisfy Local Network Privacy.
 - **`Restart=always` / `RestartForceExitStatus`** on systemd; Windows relies on the gateway's own in-process restart path because the launcher exits immediately.
-- **SIGUSR2 stack dump** — `kill -USR2 <pid>` appends every thread's stack to a faulthandler log and keeps running (no restart needed to inspect a stall).
-- **Event-loop watchdog** — an out-of-loop probe thread checks the async loop every 30s; after 3 consecutive missed probes it dumps stacks, stamps `gateway_state.json` as `degraded`, and exits 75 so the supervisor restarts it. A `heartbeat stale` notice appears if `gateway_state.json` isn't refreshed for >120s.
+- **SIGUSR2 stack dump** --- `kill -USR2 <pid>` appends every thread's stack to a faulthandler log and keeps running (no restart needed to inspect a stall).
+- **Event-loop watchdog** --- an out-of-loop probe thread checks the async loop every 30s; after 3 consecutive missed probes it dumps stacks, stamps `gateway_state.json` as `degraded`, and exits 75 so the supervisor restarts it. A `heartbeat stale` notice appears if `gateway_state.json` isn't refreshed for >120s.
 
 ### Proposed subcommands for our gateway
 
@@ -52,7 +52,7 @@ Key production patterns observed:
 
 ---
 
-## 2. Diagnostics — `doctor`
+## 2. Diagnostics --- `doctor`
 
 ### What Hermes does
 
@@ -65,7 +65,7 @@ Hermes has `hermes doctor` which diagnoses config and dependency issues. It warn
 
 A `doctor` command that checks, in order, and reports PASS/WARN/FAIL with remediation hints:
 
-| Check | What it verifies | Fail → remediation |
+| Check | What it verifies | Fail --- remediation |
 |---|---|---|
 | Node version | `node --version` >= 20 | Upgrade Node (uses `AbortSignal.timeout`, global `fetch`). |
 | Config validity | `config.json` exists and parses as JSON; required keys present | Copy `config.example.json` to `config.json`, fill `botToken`. |
@@ -125,7 +125,7 @@ An interactive `setup` command (PowerShell-friendly, since our primary platform 
 
 ### What we have
 
-`allowedUserIds` array in `config.json` — a single flat allowlist with no tiers, no pairing, no scope distinction.
+`allowedUserIds` array in `config.json` --- a single flat allowlist with no tiers, no pairing, no scope distinction.
 
 ### Recommended improvements
 
@@ -137,7 +137,7 @@ An interactive `setup` command (PowerShell-friendly, since our primary platform 
 | Secrets via env vars (`TELEGRAM_BOT_TOKEN`) with config fallback | Hermes uses `.env`; ADOPT in Phase 4. |
 | Rate-limit pairing codes and expire after 1 hour | Hermes practice; defer to multi-user phase. |
 
-**Decision: ADOPT (flat allowlist + optional admin split), ADAPT (env var fallback), SKIP (DM pairing for now — single-user focus).**
+**Decision: ADOPT (flat allowlist + optional admin split), ADAPT (env var fallback), SKIP (DM pairing for now --- single-user focus).**
 
 ---
 
@@ -146,9 +146,9 @@ An interactive `setup` command (PowerShell-friendly, since our primary platform 
 ### What Hermes does
 
 - **Delivery ledger (`state.db`, SQLite):** durable record around each platform send. At-least-once semantics:
-  - Send never started → redelivered as-is on next boot.
-  - Mid-send when crashed → redelivered with a visible "Recovered reply — may be a duplicate" prefix (ambiguity labeled, never silently resent).
-  - Flood control (Telegram 429) → retry after penalty; restart during penalty adopts the stored reply without re-running the agent.
+  - Send never started --- redelivered as-is on next boot.
+  - Mid-send when crashed --- redelivered with a visible "Recovered reply --- may be a duplicate" prefix (ambiguity labeled, never silently resent).
+  - Flood control (Telegram 429) --- retry after penalty; restart during penalty adopts the stored reply without re-running the agent.
   - Bounded: 3 attempts, 24-hour freshness, then abandoned. Delivered rows pruned after 7 days.
 - **Sessions persist across messages** until explicit `/new` or `/reset`; no idle/daily auto-reset.
 - **`gateway_state.json`:** heartbeat (`updated_at` refreshed every 60s housekeeping tick), `gateway_state` (`stopped`/`degraded`), `exit_reason`. Status renders stale heartbeat if >120s old.
@@ -164,8 +164,8 @@ An interactive `setup` command (PowerShell-friendly, since our primary platform 
 
 | Improvement | Phase | Reason |
 |---|---|---|
-| Persist Telegram `offset` in `state.json` (already partially done — `__offset`) | 1 | Critical: restarts must not replay or drop updates. |
-| Delivery ledger for outbound messages | 3 | At-least-once prevents lost replies on crash — core production requirement. |
+| Persist Telegram `offset` in `state.json` (already partially done --- `__offset`) | 1 | Critical: restarts must not replay or drop updates. |
+| Delivery ledger for outbound messages | 3 | At-least-once prevents lost replies on crash --- core production requirement. |
 | `gateway_state.json` heartbeat + stale detection | 2 | Lets `doctor`/`status` distinguish "running but stuck" from "not running". |
 | Watchdog / supervisor restart | 1 (scheduled task already restarts) | Our Windows task restarts on failure; adequate for now. |
 | Background sessions (`/bg`) | 3 | High-value UX; deferred. |
@@ -179,11 +179,11 @@ An interactive `setup` command (PowerShell-friendly, since our primary platform 
 ### What Hermes does
 
 - One `GatewayRunner` process hosts **25+ platform adapters** (Telegram, Discord, Slack, WhatsApp, Signal, SMS, Email, Home Assistant, Mattermost, Matrix, DingTalk, Feishu, WeCom, Weixin, BlueBubbles, QQ, Yuanbao, Teams, LINE, ntfy, IRC, Buzz, SimpleX, Raft, etc.).
-- Each adapter: receives messages → routes through a per-chat session store → dispatches to the `AIAgent`.
+- Each adapter: receives messages --- routes through a per-chat session store --- dispatches to the `AIAgent`.
 - Platform capability matrix (voice, images, files, threads, reactions, typing, streaming) negotiated per platform.
 - `hermes send` talks directly to platform REST endpoints for one-shot messages (no gateway needed for bot-token platforms).
 - One bot token per gateway instance; do not reuse the same token in multiple running gateways (Telegram rejects concurrent polling).
-- Forum topics mode: one topic → one session, isolated conversation history per topic.
+- Forum topics mode: one topic --- one session, isolated conversation history per topic.
 
 ### What we have
 
@@ -241,10 +241,10 @@ These ADOPT and ADAPT items are folded into the phased plan below.
 
 ## OpenCode API findings (verified against running service)
 
-- `GET /api/info` returns `{version, pid, urls, paths, capabilities}` — used for service discovery.
-- OpenAPI spec at `/openapi.json` (and `/v2/openapi.json`) is valid and includes an `event` tag ("Experimental event stream routes") and `Session.Inbox.*` schemas with `delivery: "steer queue"` — suggesting OpenCode may support an event stream. The full paths object was not enumerated (returned 0 keys via the quick check), so this needs deeper investigation before replacing message polling.
+- `GET /api/info` returns `{version, pid, urls, paths, capabilities}` --- used for service discovery.
+- OpenAPI spec at `/openapi.json` (and `/v2/openapi.json`) is valid and includes an `event` tag ("Experimental event stream routes") and `Session.Inbox.*` schemas with `delivery: "steer queue"` --- suggesting OpenCode may support an event stream. The full paths object was not enumerated (returned 0 keys via the quick check), so this needs deeper investigation before replacing message polling.
 - Confirmed working endpoints used by the bridge: `POST /api/session`, `POST /api/session/{id}/prompt`, `GET /api/session/{id}/message`, `GET /api/session/active`, `GET|POST /api/session/{id}/permission`, `POST /api/session/{id}/permission/{id}/reply`, `POST /api/session/{id}/interrupt`.
-- No SSE/WebSocket confirmed yet — message-stream polling remains the transport until the `event` routes are verified.
+- No SSE/WebSocket confirmed yet --- message-stream polling remains the transport until the `event` routes are verified.
 
 ---
 
