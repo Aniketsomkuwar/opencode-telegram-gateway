@@ -1,0 +1,12 @@
+node_modules
+dist
+data
+inbox
+config.json
+state.json
+gateway.state.json
+gateway.lock
+audit.jsonl
+*.log
+.git
+.github

@@ -1,3 +1,7 @@
+# Prefer the built-in installer, which writes this unit for you:
+#   node dist/index.js install
+#
+# Copy this file to ~/.config/systemd/user/ only if you want it by hand.
 [Unit]
 Description=OpenCode Telegram Gateway
 After=network-online.target
@@ -6,10 +10,13 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=%h/opencode-telegram-gateway
-ExecStart=/usr/bin/env node %h/opencode-telegram-gateway/bridge.mjs
+ExecStart=/usr/bin/env node %h/opencode-telegram-gateway/dist/index.js run
 Restart=always
 RestartSec=5
 Environment=NODE_ENV=production
+# Secrets can live in the environment instead of config.json:
+# Environment=TELEGRAM_BOT_TOKEN=...
+# Environment=GATEWAY_PIN=...
 
 [Install]
 WantedBy=default.target
