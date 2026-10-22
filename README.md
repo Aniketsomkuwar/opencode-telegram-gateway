@@ -65,6 +65,12 @@ node dist/index.js start
 node dist/index.js status
 ```
 
+## Install with an AI agent
+
+Do not want to run the steps by hand? Paste [`prompt.md`](prompt.md) into Claude Code, Codex, Cursor, Gemini CLI, Aider or any agent that can run shell commands on the machine hosting OpenCode.
+
+That prompt tells the agent to check prerequisites, validate your bot token with `getMe`, build, run `doctor`, prove the round trip, register the service, and report exactly which commands changed your machine. It also forbids the two things that cause real damage: printing your token and opening an inbound port.
+
 ## Commands
 
 **Sessions**
