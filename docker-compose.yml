@@ -1,0 +1,30 @@
+# Run the gateway in a container. No ports are published: the gateway only
+# makes outbound calls to Telegram and to the OpenCode service.
+#
+#   docker compose up -d --build
+#   docker compose logs -f
+#
+# Telegram: put TELEGRAM_BOT_TOKEN in .env next to this file.
+# OpenCode: the service must be reachable from the container. On Docker Desktop
+# use host.docker.internal; on Linux use the host gateway address and make sure
+# OpenCode listens on it (see SECURITY.md before widening the bind).
+
+services:
+  gateway:
+    build: .
+    image: opencode-telegram-gateway:2.0.0
+    container_name: opencode-telegram-gateway
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      GATEWAY_HOME: /data
+      OPENCODE_SERVICE_URL: http://host.docker.internal:45278
+    volumes:
+      - ./data:/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # The container still needs the OpenCode Basic-auth password. Mount the
+    # service file read-only instead of copying the secret into the image.
+    # volumes:
+    #   - ${HOME}/.config/opencode/service.json:/home/node/.config/opencode/service.json:ro
