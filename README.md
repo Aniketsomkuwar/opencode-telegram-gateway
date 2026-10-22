@@ -28,7 +28,7 @@ Telegram  <-- long poll / send -->  gateway  <-- HTTP + Basic auth -->  OpenCode
  (cloud)        outbound only      (this repo)                        (127.0.0.1:45278)
 ```
 
-Nothing listens for inbound traffic. The gateway dials out to `api.telegram.org` and to `127.0.0.1`. That is the whole point: remote control without exposing your machine.
+Nothing listens for inbound traffic. The gateway dials out to `api.telegram.org` and to `127.0.0.1`. That is the whole point: remote control without exposing your machine. It also means the phone and the host never need to share a network. Your phone reaches the gateway through Telegram, so home WiFi, office WiFi and mobile data all behave the same.
 
 ## Highlights
 
@@ -103,6 +103,7 @@ That prompt tells the agent to check prerequisites, validate your bot token with
 | Command | What it does |
 |---|---|
 | `/health`, `/ping` | Uptime, OpenCode version and URL, queue depth, pending approvals, last error |
+| `/help`, `/commands`, `/whoami` | Command list; your user id, role and chat |
 | `/verbose on\|off` | Progress line and live tool feed |
 | `/watch on\|off` | Completion ping when any session finishes |
 | `/schedule in 10m <text>` | Run a prompt later (`at 09:30` also works) |
@@ -170,6 +171,7 @@ Secrets: `TELEGRAM_BOT_TOKEN`, `GATEWAY_PIN`, `GATEWAY_WEBHOOK_SECRET`. None of 
 | `CHANGELOG.md` | Release history |
 | `docs/AUDIT.md` | The original reliability audit and which findings are now closed |
 | `docs/HERMES-COMPARISON.md` | Design comparison feeding the phased plan |
+| `AGENTS.md` | Orientation for AI coding agents working in this repo |
 
 ## Troubleshooting
 
@@ -185,6 +187,8 @@ Secrets: `TELEGRAM_BOT_TOKEN`, `GATEWAY_PIN`, `GATEWAY_WEBHOOK_SECRET`. None of 
 ## FAQ
 
 **Does it open a port?** No. Every connection is outbound. The optional webhook is off by default and refuses anything but loopback.
+
+**Can I use it from another network, like my phone on mobile data?** Yes, and that is the normal way to use it. Your phone talks to Telegram and the gateway talks to Telegram; the two never connect to each other, so NAT, a changing IP and cellular data change nothing. The only requirement is that the host stays awake, online and logged in, since a sleeping laptop stops polling.
 
 **Can I use it next to the TUI or desktop app?** Yes, they are separate clients on the same sessions. Avoid typing into the same session from two clients at once.
 
