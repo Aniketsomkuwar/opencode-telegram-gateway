@@ -1,4 +1,4 @@
-﻿import { test } from 'node:test';
+import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { SessionQueue } from '../dist/queue.js';
 import { Logger } from '../dist/logger.js';

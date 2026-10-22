@@ -1,4 +1,4 @@
-﻿{
+{
   "name": "opencode-telegram-gateway",
   "version": "2.0.0",
   "description": "Control OpenCode sessions from Telegram over outbound long polling. No ports, no tunnels.",

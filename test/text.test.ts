@@ -1,4 +1,4 @@
-﻿import { test } from 'node:test';
+import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { redactSecrets } from '../dist/redact.js';
 import { formatForTelegram, escapeMd } from '../dist/markdown.js';

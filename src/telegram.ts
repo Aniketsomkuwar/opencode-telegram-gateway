@@ -1,4 +1,4 @@
-﻿import type { Logger } from './logger.js';
+import type { Logger } from './logger.js';
 import { splitMessage } from './split.js';
 import { retry, sleep, errorMessage, short } from './util.js';
 
