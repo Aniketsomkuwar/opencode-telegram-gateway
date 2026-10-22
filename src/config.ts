@@ -1,4 +1,4 @@
-﻿import fs from 'node:fs';
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { Role } from './types.js';
@@ -129,7 +129,8 @@ export function loadConfig(home = defaultHome()): { config: Config; paths: Paths
 
   let raw: Record<string, unknown>;
   try {
-    const parsed = JSON.parse(fs.readFileSync(paths.config, 'utf8')) as unknown;
+    const text = fs.readFileSync(paths.config, 'utf8').replace(/^\uFEFF/, '');
+    const parsed = JSON.parse(text) as unknown;
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('root must be an object');
     raw = parsed as Record<string, unknown>;
   } catch (error) {
@@ -179,7 +180,7 @@ export function loadConfig(home = defaultHome()): { config: Config; paths: Paths
     verbose: parseBoolean(raw.verbose, false),
     watchAll: parseBoolean(raw.watchAll, false),
     notifyToolCalls: parseBoolean(raw.notifyToolCalls, false),
-    progress: parseBoolean(raw.progress, true),
+    progress: parseBoolean(raw.progress, false),
     rememberScript: typeof raw.rememberScript === 'string' ? raw.rememberScript : undefined,
     plugin: typeof raw.plugin === 'string' ? raw.plugin : undefined,
     serviceUrl: typeof raw.serviceUrl === 'string' ? raw.serviceUrl : process.env.OPENCODE_SERVICE_URL,
@@ -249,4 +250,5 @@ export function validateTokenShape(token: string): string | null {
   if (!TOKEN_PATTERN.test(token)) return 'botToken does not look like <digits>:<35+ chars>';
   return null;
 }
+
 

@@ -5,7 +5,7 @@
   "roles": { "123456789": "owner" },
   "ownerChatId": 123456789,
   "verbose": false,
-  "progress": true,
+  "progress": false,
   "watchAll": false,
   "notifyToolCalls": false,
   "servicePort": 45278,
@@ -24,3 +24,4 @@
   "audit": { "maxBytes": 5242880, "keep": 5 },
   "webhook": { "enabled": false, "host": "127.0.0.1", "port": 45888, "secretEnv": "GATEWAY_WEBHOOK_SECRET" }
 }
+

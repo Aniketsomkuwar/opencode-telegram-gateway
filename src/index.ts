@@ -184,7 +184,7 @@ async function main(): Promise<void> {
     case 'setup':
       return runSetup(args.home);
     case 'version': {
-      const pkg = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version?: string };
+      const pkg = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8').replace(/^\uFEFF/, '')) as { version?: string };
       console.log(pkg.version ?? '0.0.0');
       return;
     }

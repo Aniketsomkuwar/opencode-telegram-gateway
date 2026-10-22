@@ -1,4 +1,4 @@
-﻿import { test } from 'node:test';
+import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -37,6 +37,13 @@ test('env token overrides the file', () => {
   } finally {
     delete process.env.TELEGRAM_BOT_TOKEN;
   }
+});
+
+test('tolerates a UTF-8 BOM written by Windows editors', () => {
+  const home = tempHome();
+  fs.writeFileSync(path.join(home, 'config.json'), `\uFEFF${JSON.stringify({ botToken: TOKEN, allowedUserIds: [7] })}`);
+  const { config } = loadConfig(home);
+  assert.equal(config.allowedUserIds[0], 7);
 });
 
 test('missing config is a clear error', () => {

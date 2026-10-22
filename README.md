@@ -89,7 +89,7 @@ Roles: `viewer` can read (sessions, status, cost, diff, todo), `operator` can pr
 | `roles` | `{}` | Explicit `owner` / `operator` / `viewer` per user id |
 | `ownerChatId` | first allowed | Where completion pings go |
 | `verbose` | `false` | Tool feed and always-on progress message |
-| `progress` | `true` | Live progress after 4 seconds, removed when the answer lands |
+| `progress` | `false` | Live progress after 4 seconds; off by default, `/verbose` turns it on |
 | `watchAll` | `false` | Ping when any session finishes |
 | `servicePort` | `45278` | Fallback OpenCode port when `/api/info` is unreachable |
 | `serviceUrl` | auto | Pin the OpenCode base URL |
@@ -171,3 +171,4 @@ Layout: `src/config.ts` (validation), `src/state.ts` (offset and chats), `src/qu
 ## License
 
 MIT. See `SECURITY.md` for the threat model.
+

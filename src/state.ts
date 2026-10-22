@@ -76,7 +76,7 @@ export class StateStore {
   private load(): StateFile {
     if (!fs.existsSync(this.file)) return emptyState();
     try {
-      return migrateState(JSON.parse(fs.readFileSync(this.file, 'utf8')));
+      return migrateState(JSON.parse(fs.readFileSync(this.file, 'utf8').replace(/^\uFEFF/, '')));
     } catch (error) {
       const backup = `${this.file}.corrupt.${Date.now()}`;
       try {
