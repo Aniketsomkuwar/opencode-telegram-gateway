@@ -985,11 +985,12 @@ export class Gateway {
       }
 
       try {
-        await this.opencode.prompt(sessionId, text, files);
+        const surfaced = this.surface(text);
+        await this.opencode.prompt(sessionId, surfaced, files);
       } catch (error) {
         if (files.length) {
           this.logger.warn('prompt with attachments failed; retrying text only', { error: errorMessage(error) });
-          await this.opencode.prompt(sessionId, `${text}\n\n(attachments were not accepted by the service)`, []);
+          await this.opencode.prompt(sessionId, `${this.surface(text)}\n\n(attachments were not accepted by the service)`, []);
         } else throw error;
       }
 
@@ -1229,7 +1230,7 @@ export class Gateway {
       await this.waitForSessionIdle(sessionId);
       const before = await this.opencode.messages(sessionId, 100).catch(() => [] as MessageInfo[]);
       const baseline = idleBaselineOf(before);
-      await this.opencode.prompt(sessionId, job.text, []);
+      await this.opencode.prompt(sessionId, this.surface(job.text), []);
       const result = await this.opencode.waitForIdle(sessionId, baseline, { timeoutMs: this.config.promptTimeoutMinutes * 60_000 });
       const output = this.assistantText([...result.messages].reverse().find((message) => message.type === 'assistant'));
       const head = `[scheduled ${job.id}] ${duration(Date.now() - started)}`;
@@ -1391,6 +1392,13 @@ export class Gateway {
       child.on('error', reject);
       child.on('close', (code) => (code === 0 ? resolve(stdout.trim()) : reject(new Error(stderr.trim() || `exit ${code}`))));
     });
+  }
+
+  // ---------------------------------------------------------------- surfaces
+
+  /** Tag Telegram-originated prompts so a brain's channel rules can apply. */
+  private surface(text: string): string {
+    return this.config.surfaceHint ? `[surface: telegram]\n\n${text}` : text;
   }
 
   // ---------------------------------------------------------------- webhook + heartbeat

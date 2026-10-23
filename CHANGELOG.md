@@ -7,6 +7,7 @@ All notable changes to this project are documented here. The format follows Keep
 ### Added
 
 - `/btw <question>`: a quick question answered in a separate, persistent side session per chat, kept out of the current work session and its queue.
+- `surfaceHint` (default `true`): Telegram prompts are prefixed with `[surface: telegram]`, so an instruction file can apply channel-specific reply rules. Set it to `false` for untagged prompts.
 
 ### Changed
 

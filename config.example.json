@@ -6,6 +6,7 @@
   "ownerChatId": 123456789,
   "verbose": false,
   "progress": false,
+  "surfaceHint": true,
   "watchAll": false,
   "notifyToolCalls": false,
   "servicePort": 45278,

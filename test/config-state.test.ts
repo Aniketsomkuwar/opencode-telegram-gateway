@@ -25,6 +25,14 @@ test('loads a valid config and applies defaults', () => {
   assert.equal(config.permissionTimeoutSeconds, 300);
   assert.equal(config.roles['42'], 'owner');
   assert.equal(config.redact, true);
+  assert.equal(config.surfaceHint, true);
+});
+
+test('surfaceHint can be disabled', () => {
+  const home = tempHome();
+  writeConfig(home, { botToken: TOKEN, allowedUserIds: [42], surfaceHint: false });
+  const { config } = loadConfig(home);
+  assert.equal(config.surfaceHint, false);
 });
 
 test('env token overrides the file', () => {

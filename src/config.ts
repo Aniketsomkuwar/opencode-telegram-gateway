@@ -45,6 +45,8 @@ export interface Config {
   watchAll: boolean;
   notifyToolCalls: boolean;
   progress: boolean;
+  /** Prefix Telegram prompts with [surface: telegram] so channel-aware instruction files can route. */
+  surfaceHint: boolean;
   rememberScript?: string;
   /** Optional plugin module with onPrompt/onReply/onPermission hooks. */
   plugin?: string;
@@ -181,6 +183,7 @@ export function loadConfig(home = defaultHome()): { config: Config; paths: Paths
     watchAll: parseBoolean(raw.watchAll, false),
     notifyToolCalls: parseBoolean(raw.notifyToolCalls, false),
     progress: parseBoolean(raw.progress, false),
+    surfaceHint: parseBoolean(raw.surfaceHint, true),
     rememberScript: typeof raw.rememberScript === 'string' ? raw.rememberScript : undefined,
     plugin: typeof raw.plugin === 'string' ? raw.plugin : undefined,
     serviceUrl: typeof raw.serviceUrl === 'string' ? raw.serviceUrl : process.env.OPENCODE_SERVICE_URL,

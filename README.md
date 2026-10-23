@@ -133,6 +133,7 @@ Roles: `viewer` reads, `operator` prompts and approves once, `owner` does everyt
 | `ownerChatId` | first allowed | Where pings and scheduled results go |
 | `verbose` | `false` | Progress line plus tool feed |
 | `progress` | `false` | Progress line only |
+| `surfaceHint` | `true` | Prefix Telegram prompts with `[surface: telegram]` so channel-aware instruction files can route |
 | `watchAll` | `false` | Ping when any session finishes |
 | `serviceUrl`, `servicePort` | auto, `45278` | Pin the OpenCode endpoint |
 | `permissionTimeoutSeconds` | `300` | Auto-deny after this long |
