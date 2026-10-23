@@ -94,6 +94,19 @@ test('state store persists offset and chats atomically', () => {
   assert.equal(reloaded.chat(42).sessionId, 'ses_x');
 });
 
+test('keeps the /btw side session across reloads', () => {
+  const file = path.join(tempHome(), 'state.json');
+  const store = new StateStore(file);
+  store.chat(42).btwSessionId = 'ses_btw';
+  store.flush();
+  assert.equal(new StateStore(file).chat(42).btwSessionId, 'ses_btw');
+});
+
+test('migrates a chat that only carries a btw session', () => {
+  const migrated = migrateState({ chats: { '9': { btwSessionId: 'ses_btw' } } });
+  assert.equal(migrated.chats['9']?.btwSessionId, 'ses_btw');
+});
+
 test('offset never moves backwards', () => {
   const store = new StateStore(path.join(tempHome(), 'state.json'));
   store.offset = 10;

@@ -97,6 +97,7 @@ That prompt tells the agent to check prerequisites, validate your bot token with
 | `/undo`, `/redo` | Revert the last turn (files included), or re-run the last prompt |
 | `/diff [file]` | Changed files, or the patch as a `.patch` file |
 | `/todo`, `/cost` | Latest todo list, session tokens and cost |
+| `/btw <question>` | Quick side question in a separate session; leaves the work session untouched |
 
 **Ops and automation**
 

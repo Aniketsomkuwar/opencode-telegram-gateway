@@ -30,6 +30,10 @@ interface PromptRequest {
   ctx: UpdateContext;
   text: string;
   files: Array<{ uri: string; name?: string }>;
+  /** Target a specific session instead of the chat's current one (used by /btw). */
+  sessionId?: string;
+  /** Side question: do not overwrite the work session's lastPrompt. */
+  side?: boolean;
 }
 
 const VIEWER_COMMANDS = new Set(['/start', '/help', '/commands', '/ping', '/sessions', '/active', '/status', '/cost', '/diff', '/todo', '/health', '/queue', '/whoami']);
@@ -403,6 +407,7 @@ export class Gateway {
       { command: 'undo', description: 'revert last turn' },
       { command: 'redo', description: 're-run last prompt' },
       { command: 'todo', description: 'current todo list' },
+      { command: 'btw', description: 'quick side question' },
       { command: 'schedule', description: 'run later' },
       { command: 'jobs', description: 'scheduled jobs' },
       { command: 'health', description: 'gateway health' },
@@ -434,6 +439,7 @@ export class Gateway {
       '/undo - revert the last turn',
       '/redo - re-run the last prompt',
       '/todo - latest todo list',
+      '/btw <question> - quick side question, separate session',
       '/schedule in 10m <text> - run later',
       '/jobs - scheduled jobs, /cancel <id>',
       '/health - gateway health',
@@ -709,6 +715,12 @@ export class Gateway {
         return this.enqueuePrompt({ ctx, text: previous, files: [] });
       }
 
+      case '/btw': {
+        if (!argument) return reply('usage: /btw <question>');
+        const sessionId = await this.ensureBtwSession(ctx);
+        return this.enqueuePrompt({ ctx, text: argument, files: [], sessionId, side: true });
+      }
+
       case '/remember': {
         if (!this.config.rememberScript) return reply('remember is not configured; set rememberScript');
         if (!argument) return reply('usage: /remember <text>');
@@ -894,6 +906,24 @@ export class Gateway {
     return created.id;
   }
 
+  /**
+   * A side session for /btw. It is created once per chat and reused, so side
+   * questions keep their own context without touching the work session.
+   */
+  private async ensureBtwSession(ctx: UpdateContext): Promise<string> {
+    const chat = this.state.chat(ctx.chatId);
+    if (chat.btwSessionId) {
+      const existing = await this.opencode.session(chat.btwSessionId).catch(() => null);
+      if (existing) return existing.id;
+      chat.btwSessionId = undefined;
+    }
+    const created = await this.opencode.createSession({ title: 'btw: side questions' });
+    chat.btwSessionId = created.id;
+    this.state.scheduleSave();
+    this.audit.write({ actor: ctx.userId, action: 'session.create', detail: created.id, meta: { btw: true } });
+    return created.id;
+  }
+
   private async enqueuePrompt(request: PromptRequest): Promise<void> {
     const { ctx } = request;
     if (this.state.chat(ctx.chatId).locked) {
@@ -907,10 +937,12 @@ export class Gateway {
 
     let text = request.text.trim();
     if (!text) return;
-    const sessionId = await this.ensureSession(ctx, text);
+    const sessionId = request.sessionId ?? (await this.ensureSession(ctx, text));
     text = await applyPromptHook(this.hooks, { text, sessionId, userId: ctx.userId, chatId: ctx.chatId }, this.logger);
-    this.state.chat(ctx.chatId).lastPrompt = text;
-    this.state.scheduleSave();
+    if (!request.side) {
+      this.state.chat(ctx.chatId).lastPrompt = text;
+      this.state.scheduleSave();
+    }
 
     const result = this.queue.enqueue(
       sessionId,

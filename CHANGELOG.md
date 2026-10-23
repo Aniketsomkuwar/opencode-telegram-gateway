@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here. The format follows Keep a Changelog and the project uses semantic versioning.
 
+## [Unreleased]
+
+### Added
+
+- `/btw <question>`: a quick question answered in a separate, persistent side session per chat, kept out of the current work session and its queue.
+
 ## [2.0.0] - 2026-10-23
 
 Complete rewrite of the gateway in strict TypeScript, keeping the v1 `config.json`, `state.json` and command surface compatible.

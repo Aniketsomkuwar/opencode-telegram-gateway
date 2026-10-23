@@ -38,7 +38,7 @@ export function migrateState(input: unknown): StateFile {
     if (key === 'version' || key === 'jobs' || key === 'updatedAt' || key === 'chats') continue;
     if (!value || typeof value !== 'object' || Array.isArray(value)) continue;
     const entry = value as Record<string, unknown>;
-    if (!('sessionId' in entry) && !('lastList' in entry) && !('locked' in entry) && !('topics' in entry)) continue;
+    if (!('sessionId' in entry) && !('lastList' in entry) && !('locked' in entry) && !('topics' in entry) && !('btwSessionId' in entry)) continue;
     state.chats[key] = {
       sessionId: typeof entry.sessionId === 'string' ? entry.sessionId : null,
       lastList: Array.isArray(entry.lastList) ? entry.lastList.map(String) : undefined,
@@ -48,6 +48,7 @@ export function migrateState(input: unknown): StateFile {
           ? Object.fromEntries(Object.entries(entry.topics as Record<string, unknown>).map(([k, v]) => [k, String(v)]))
           : undefined,
       lastPrompt: typeof entry.lastPrompt === 'string' ? entry.lastPrompt : undefined,
+      btwSessionId: typeof entry.btwSessionId === 'string' ? entry.btwSessionId : undefined,
     };
   }
 

@@ -11,6 +11,8 @@ export interface ChatState {
   topics?: Record<string, string>;
   /** Last prompt, used by /redo. */
   lastPrompt?: string;
+  /** Side session used by /btw, kept separate from the work session. */
+  btwSessionId?: string;
 }
 
 export interface QueueJob {
