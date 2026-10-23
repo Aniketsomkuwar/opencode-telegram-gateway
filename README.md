@@ -159,6 +159,12 @@ Secrets: `TELEGRAM_BOT_TOKEN`, `GATEWAY_PIN`, `GATEWAY_WEBHOOK_SECRET`. None of 
 - **Splitting.** Paragraph, then line, then space boundaries; a cut inside a code fence closes and reopens it.
 - **Operations.** Single-instance lock with stale detection, graceful shutdown, heartbeat file, JSON logs with rotation, `doctor` for the whole chain.
 
+## Persistent memory
+
+The gateway carries prompts; it does not carry what the assistant knows. That lives in the brain, and the brain should outlive every project and every session. Pair the gateway with [opencode-brain](https://github.com/Aniketsomkuwar/opencode-brain): plain Markdown loaded through the `instructions` array in `opencode.json`, with `tools/remember.mjs` appending dated entries.
+
+Point `rememberScript` at `opencode-brain/tools/remember.mjs` and `/remember <text>` from Telegram writes straight into the journal. `.js` and `.mjs` scripts are run with the current Node binary, so no PowerShell is needed.
+
 ## Deployment
 
 - **npm:** `node dist/index.js install|start|stop|restart|status`. The installer picks the platform's service manager: a logon task on Windows, a `systemd --user` unit on Linux, a launchd agent on macOS.
