@@ -46,6 +46,8 @@ Nothing listens for inbound traffic. The gateway dials out to `api.telegram.org`
 
 You need Node 20+, a running OpenCode service, and a bot token from [@BotFather](https://t.me/BotFather).
 
+It runs on Windows, macOS and Linux. On macOS or Linux, the recommended install path is the [agent prompt](#install-with-an-ai-agent) below: it detects the OS and sets up the correct service (a `systemd --user` unit on Linux, a launchd agent on macOS).
+
 ```bash
 git clone https://github.com/Aniketsomkuwar/opencode-telegram-gateway
 cd opencode-telegram-gateway
@@ -67,7 +69,7 @@ node dist/index.js status
 
 ## Install with an AI agent
 
-Do not want to run the steps by hand? Paste [`prompt.md`](prompt.md) into Claude Code, Codex, Cursor, Gemini CLI, Aider or any agent that can run shell commands on the machine hosting OpenCode.
+**macOS and Linux: install with this prompt.** Paste [`prompt.md`](prompt.md) into Claude Code, Codex, Cursor, Gemini CLI, Aider or any agent that can run shell commands on the machine hosting OpenCode. The prompt starts by detecting the OS, then uses the matching shell, permission commands, log commands and service manager, so you do not have to translate the Windows examples by hand.
 
 That prompt tells the agent to check prerequisites, validate your bot token with `getMe`, build, run `doctor`, prove the round trip, register the service, and report exactly which commands changed your machine. It also forbids the two things that cause real damage: printing your token and opening an inbound port.
 
@@ -159,7 +161,9 @@ Secrets: `TELEGRAM_BOT_TOKEN`, `GATEWAY_PIN`, `GATEWAY_WEBHOOK_SECRET`. None of 
 
 ## Deployment
 
-- **npm:** `node dist/index.js install|start|stop|restart|status`.
+- **npm:** `node dist/index.js install|start|stop|restart|status`. The installer picks the platform's service manager: a logon task on Windows, a `systemd --user` unit on Linux, a launchd agent on macOS.
+- **Linux:** `systemctl --user enable --now opencode-telegram-gateway`. On an unattended machine also run `loginctl enable-linger $USER`, otherwise the unit stops at logout.
+- **macOS:** the LaunchAgent runs while the user is logged in and restarts on crash, but not after a logout.
 - **Docker:** `docker compose up -d --build`. No ports are published; mount `~/.config/opencode/service.json` read-only and set `OPENCODE_SERVICE_URL` (see `docker-compose.yml`).
 - **CI:** GitHub Actions runs typecheck, tests and an audit of runtime dependencies on Node 22 and 24.
 
@@ -184,6 +188,8 @@ Secrets: `TELEGRAM_BOT_TOKEN`, `GATEWAY_PIN`, `GATEWAY_WEBHOOK_SECRET`. None of 
 | No reply in a long session | Fixed in 2.0.0: completion is detected from the newest message page. Upgrade |
 | Prompt ignored while the TUI is busy | By design: the gateway waits for the session to go idle rather than steering a running turn |
 | `doctor` warns about a non-loopback bind | Set `"hostname": "127.0.0.1"` in `~/.config/opencode/service.json` |
+| Service stops after logout | Linux: `loginctl enable-linger $USER`. macOS: the LaunchAgent only runs while you are logged in |
+| Service dies after a Node upgrade | nvm, Volta or asdf moved the binary; re-run `node dist/index.js install` |
 
 ## FAQ
 

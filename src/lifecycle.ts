@@ -102,6 +102,7 @@ export function installService(home: string, force = false): void {
     const loaded = spawnSync('launchctl', ['load', plistPath], { encoding: 'utf8' });
     if (loaded.status !== 0) throw new Error(`launchctl load failed: ${loaded.stderr}`);
     console.log(`installed launch agent ${label}`);
+    console.log('the agent runs while this user is logged in; it stops at logout');
     return;
   }
 
@@ -131,6 +132,7 @@ WantedBy=default.target
   if (reload.status !== 0) console.warn(`systemctl daemon-reload failed: ${reload.stderr}`);
   console.log(`installed systemd unit ${unitPath}`);
   console.log('enable it with: systemctl --user enable --now opencode-telegram-gateway');
+  console.log('for an unattended machine: loginctl enable-linger $USER (otherwise it stops at logout)');
 }
 
 export function serviceAction(action: 'start' | 'stop' | 'restart' | 'status'): void {

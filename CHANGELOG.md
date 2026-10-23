@@ -8,6 +8,10 @@ All notable changes to this project are documented here. The format follows Keep
 
 - `/btw <question>`: a quick question answered in a separate, persistent side session per chat, kept out of the current work session and its queue.
 
+### Changed
+
+- `prompt.md` detects the OS first and gives Windows, macOS and Linux commands. `install` now prints the Linux linger and macOS login caveats.
+
 ## [2.0.0] - 2026-10-23
 
 Complete rewrite of the gateway in strict TypeScript, keeping the v1 `config.json`, `state.json` and command surface compatible.
